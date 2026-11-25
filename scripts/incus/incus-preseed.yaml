@@ -1,0 +1,32 @@
+# incus admin init --preseed < incus-preseed.yaml
+# Expects an existing LVM thin pool: lvcreate --type thin-pool -L 340G -n incus-thin vg0
+storage_pools:
+- name: default
+  driver: lvm
+  config:
+    source: vg0
+    lvm.thinpool_name: incus-thin
+    lvm.vg.force_reuse: "true"
+networks:
+- name: incusbr0
+  type: bridge
+  config:
+    ipv4.address: 10.120.0.1/24
+    ipv4.nat: "true"
+    ipv6.address: none
+profiles:
+- name: default
+  config:
+    limits.cpu: "6"
+    limits.memory: 6GiB
+    security.nesting: "true"
+  devices:
+    root:
+      path: /
+      pool: default
+      type: disk
+      size: 40GiB
+    eth0:
+      name: eth0
+      network: incusbr0
+      type: nic
