@@ -38,7 +38,7 @@ The host stays on Debian. Containers don't have their own kernel, so every sandb
 Following roughly what the hosted providers do:
 
 1. `base`: stock `images:ubuntu/24.04`, never modified.
-2. `base-agent` (optional): the common baseline (git, gh, ripgrep, jq, Python + uv, Node + pnpm, Docker, Claude Code, Codex).
+2. `ubuntu-agent`: the common baseline of the hosted providers (Node, Python + uv, Go, Rust, Docker, Chromium, PostgreSQL/Redis, gh, Claude Code, Codex, OpenCode, pi), rebuilt weekly from `base`. Details in [`agent-image.md`](agent-image.md).
 3. Per-project containers: run the repo's setup script, take an `incus snapshot`, and clone from that for individual sessions.
 
 Resetting a dirty sandbox takes ~4.5 seconds with `incus snapshot restore`, which beats rebuilding from scratch.

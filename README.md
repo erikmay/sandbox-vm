@@ -11,6 +11,7 @@ Most hosted agent providers give each session a fresh Linux machine with a bunch
 - [`research/probes/`](research/probes/): raw probe outputs, grouped by provider and date.
 - [`approach/`](approach/): the self-hosted Incus setup on a spare laptop, capacity notes, and things that went wrong during setup.
 - [`approach/remote-reinstall.md`](approach/remote-reinstall.md): reinstalling a headless Linux box to encrypted Debian 13 over SSH via preseed, tested in QEMU first.
+- [`approach/agent-image.md`](approach/agent-image.md): the `ubuntu-agent` template image (what's in it, defaults, isolation, build and verify scripts).
 - [`benchmarks/`](benchmarks/): startup, teardown, parallel launch, and snapshot restore timings for Incus containers.
 - [`scripts/`](scripts/): `probe.sh`, Debian preseed templates, and the Incus setup/benchmark scripts.
 
