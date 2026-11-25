@@ -16,7 +16,7 @@ scripts/incus/new-sandbox.sh sbx1 --pubkey ~/.ssh/id_ed25519.pub \
 ```
 
 `build-agent-template.sh` never touches the current template until the new one passes
-[`verify.sh`](../scripts/images/ubuntu-agent/verify.sh) (51 checks) in a fresh copy. The
+[`verify.sh`](../scripts/images/ubuntu-agent/verify.sh) (53 checks) in a fresh copy. The
 previous template stays as `ubuntu-agent-prev` for rollback. Rebuild weekly instead of
 updating tools inside the template or the sandboxes.
 
@@ -34,7 +34,8 @@ updating tools inside the template or the sandboxes.
 | Databases | PostgreSQL 16 and Redis installed, disabled | No RAM until `sudo systemctl start postgresql` |
 | Browser | Chrome for Testing via Playwright in `/opt/ms-playwright`, OS deps installed, `chromium` on PATH; [agent-browser](https://github.com/vercel-labs/agent-browser) points at the same binary | One browser, not two |
 | GitHub | `gh` from GitHub's apt repo | |
-| Agents | Claude Code (native installer), Codex (release binary in `/usr/local/bin`), OpenCode, pi | Latest at build time, self-update off |
+| Agents | Claude Code (native installer), Codex (full release package in `/opt/codex`), OpenCode, pi | Latest at build time, self-update off |
+| Logins | None in the image. `/etc/agent-secrets.env` is loaded into every session if it exists | Written per sandbox by `sync-logins.sh`, see [`logins.md`](logins.md) |
 | SSH | Key-only, no root login; host keys generated on the first boot of each copy | |
 
 `/etc/agent-image-manifest` records the versions of each build.
@@ -62,16 +63,19 @@ updating tools inside the template or the sandboxes.
 - Nesting plus `mknod`/`setxattr` interception for Docker inside.
 - `security.port_isolation`: sandboxes can't talk to each other.
 - ACL `agent-egress`: no traffic to private ranges (LAN, VPN, `100.64.0.0/10`, link-local)
-  and none to the host except DNS and DHCP on the bridge gateway. Internet is open.
-- No credentials in the template. Log in to Claude, Codex and gh inside each sandbox, or push
-  credential files with `incus file push` after creating it. Prefer a fine-grained,
-  repo-scoped GitHub token, and don't forward your SSH agent.
+  and none to the host except DNS, DHCP and the login proxy on the bridge gateway. Internet
+  is open.
+- No credentials in the template. `new-sandbox.sh` signs each sandbox in to Codex and Claude
+  Code ([`logins.md`](logins.md)): Codex through a proxy on the host, so no OpenAI credential
+  ever enters a sandbox, and Claude Code with a token from the secret store. The proxy port is
+  the one host service the ACL lets sandboxes reach. For GitHub, prefer a fine-grained,
+  repo-scoped token or a per-sandbox SSH key, and don't forward your SSH agent.
 
 ## Measured (2026-11-25, Ryzen 7 5700U host)
 
-- Template build: about 12 minutes. Verification: 51 of 51 checks pass in a fresh copy on its first boot.
+- Template build: about 12 minutes. Verification: 53 of 53 checks pass in a fresh copy on its first boot.
 - Idle memory of a fresh sandbox: about 90–100 MB.
-- `new-sandbox.sh` (copy, start, key and git identity): about 4.3 s; SSH login works right after. The first `docker run` starts dockerd on demand.
+- `new-sandbox.sh` (copy, start, key, git identity, logins): about 5 s; SSH login works right after, and Codex and Claude Code answer without any setup in the sandbox. The first `docker run` starts dockerd on demand.
 
 ## Things that went wrong while building it
 
@@ -90,6 +94,11 @@ updating tools inside the template or the sandboxes.
   here, but test `docker run hello-world` first on other hosts.
 - Version probes need per-tool flags (`tmux -V`, `go version`), and `pi --version` prints
   to stderr.
+- **Codex needs its whole release package.** The single `codex` binary starts fine, but current
+  models run in "code mode" and fail every tool call without `codex-code-mode-host` next to it
+  ("failed to spawn code-mode host"). The image installs `codex-package-*.tar.gz` and
+  `bubblewrap`, which Codex uses for its own sandbox; that works inside the unprivileged
+  container.
 
 ## Deliberately left out
 

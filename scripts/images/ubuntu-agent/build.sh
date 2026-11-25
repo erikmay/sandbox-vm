@@ -25,7 +25,7 @@ apt-get install -y -qq --no-install-recommends \
   git git-lfs curl wget ca-certificates gnupg openssh-client openssh-server sudo \
   unzip zip xz-utils zstd bzip2 file bc time \
   jq ripgrep fd-find fzf tree tmux dtach vim nano less man-db htop lsof procps psmisc strace \
-  iproute2 iputils-ping dnsutils netcat-openbsd rsync sqlite3 shellcheck \
+  iproute2 iputils-ping dnsutils netcat-openbsd rsync sqlite3 shellcheck bubblewrap \
   locales tzdata ncurses-term \
   python3 python3-pip python3-venv python3-dev python-is-python3 \
   fonts-liberation fonts-noto-color-emoji >/dev/null
@@ -75,6 +75,16 @@ DO_NOT_TRACK="1"
 EOF
 # pam_env covers SSH and sudo -i; profile.d covers shells that skip PAM (incus exec bash -l)
 sed -e 's/^/export /' /etc/environment > /etc/profile.d/00-agent-env.sh
+
+step "Hook for per-sandbox secrets (/etc/agent-secrets.env, written by sync-logins.sh)"
+# The file does not exist in the image. KEY=value lines, root:agent 0640.
+cat > /etc/profile.d/10-agent-secrets.sh <<'SECRETS'
+if [ -r /etc/agent-secrets.env ]; then set -a; . /etc/agent-secrets.env; set +a; fi
+SECRETS
+for f in /etc/pam.d/sshd /etc/pam.d/sudo-i; do   # non-interactive `ssh host cmd` and `sudo -i` skip profile.d
+  [ -f "$f" ] || continue
+  grep -q agent-secrets "$f" || echo 'session optional pam_env.so envfile=/etc/agent-secrets.env user_readenv=0' >> "$f"
+done
 
 step "Git defaults (identity is injected per sandbox, never baked in)"
 git config --system init.defaultBranch main
@@ -148,11 +158,14 @@ chown agent:agent /home/agent/.agent-browser/config.json
 
 step "Coding agents (latest at build time, self-update off)"
 as_agent 'curl -fsSL https://claude.ai/install.sh | bash >/dev/null'
+# Codex: the full release package, not the single binary. Current models run in "code mode",
+# which needs codex-code-mode-host next to codex; the package also carries codex-exec-server.
 tmp=$(mktemp -d)
-curl -fsSL -o "$tmp/codex.tgz" https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz
-tar -xzf "$tmp/codex.tgz" -C "$tmp"
-install -m 755 "$tmp"/codex-x86_64-unknown-linux-musl /usr/local/bin/codex
+curl -fsSL -o "$tmp/codex.tgz" https://github.com/openai/codex/releases/latest/download/codex-package-x86_64-unknown-linux-musl.tar.gz
+rm -rf /opt/codex && install -d /opt/codex
+tar -xzf "$tmp/codex.tgz" -C /opt/codex
 rm -rf "$tmp"
+for b in codex codex-code-mode-host codex-exec-server; do ln -sf "/opt/codex/bin/$b" "/usr/local/bin/$b"; done
 as_agent 'curl -fsSL https://opencode.ai/install | bash >/dev/null 2>&1'
 install -d -o agent -g agent /home/agent/.config/opencode
 echo '{ "$schema": "https://opencode.ai/config.json", "autoupdate": false }' > /home/agent/.config/opencode/opencode.json

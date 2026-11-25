@@ -1,9 +1,10 @@
 #!/bin/bash
 # Create a sandbox from the current ubuntu-agent template and inject per-sandbox settings.
 #   new-sandbox.sh <name> [--memory 6GiB] [--pubkey FILE] [--git-name NAME --git-email EMAIL]
-# Credentials (Claude, Codex, gh) are never in the template; log in inside the sandbox or push
-# them yourself with `incus file push` after this script.
+# Credentials are never in the template. sync-logins.sh puts the current ones in: Codex through
+# the host's login proxy, Claude Code through its token from the secret store (scripts/logins).
 set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
 name=${1:?usage: new-sandbox.sh <name> [--memory SIZE] [--pubkey FILE] [--git-name N --git-email E]}; shift
 memory=""; pubkey=""; git_name=""; git_email=""
 while [ $# -gt 0 ]; do
@@ -29,6 +30,8 @@ if [ -n "$git_name" ] && [ -n "$git_email" ]; then
   incus exec "$name" -- sudo -u agent git config --global user.name "$git_name"
   incus exec "$name" -- sudo -u agent git config --global user.email "$git_email"
 fi
+
+"$here/sync-logins.sh" "$name"
 
 ip=""
 for _ in $(seq 1 50); do

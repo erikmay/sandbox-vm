@@ -14,6 +14,8 @@ for t in node npm pnpm bun python3 uv go rustc cargo gh git git-lfs docker jq yq
   flag=--version; case $t in tmux) flag=-V ;; go) flag=version ;; esac
   check "tool $t" as_agent "command -v $t >/dev/null && $t $flag >/dev/null 2>&1"
 done
+check "codex code-mode host and exec server installed" bash -c 'test -x /opt/codex/bin/codex-code-mode-host && command -v codex-code-mode-host codex-exec-server >/dev/null'
+check "bubblewrap works for the agent (Codex's own sandbox)" as_agent 'bwrap --ro-bind / / --dev /dev --proc /proc true'
 check "node default is first configured version" as_agent 'node --version | grep -q "^v24\."'
 check "node 26 available" as_agent 'mise exec node@26 -- node --version | grep -q "^v26\."'
 check "PATH without login shell (env -i + /etc/environment)" bash -c 'su agent -s /bin/bash -c "command -v claude && command -v node" >/dev/null'
@@ -32,6 +34,10 @@ check "sshd config valid" bash -c 'install -d -m 755 /run/sshd && sshd -t'
 check "first boot reached running" bash -c '[ "$(systemctl is-system-running)" = running ]'
 check "ssh socket listening" systemctl is-active --quiet ssh.socket
 check "no credentials in homes" bash -c '! ls /home/agent/.claude/.credentials.json /home/agent/.codex/auth.json /home/agent/.config/gh/hosts.yml /home/agent/.netrc /root/.netrc 2>/dev/null | grep -q .'
+check "secrets hook loads /etc/agent-secrets.env (sudo -i and login shell)" bash -c '
+  printf "VERIFY_SECRET=works\n" > /etc/agent-secrets.env && chown root:agent /etc/agent-secrets.env && chmod 640 /etc/agent-secrets.env
+  a=$(sudo -iu agent bash -c "echo \$VERIFY_SECRET"); b=$(su -l agent -c "echo \$VERIFY_SECRET")
+  rm -f /etc/agent-secrets.env; [ "$a" = works ] && [ "$b" = works ]'
 check "git identity unset" bash -c '! git config --system user.email && ! sudo -iu agent git config --global user.email'
 check "timezone UTC" bash -c '[ "$(date +%Z)" = UTC ]'
 check "no apt timers" bash -c '! systemctl is-enabled --quiet apt-daily.timer'

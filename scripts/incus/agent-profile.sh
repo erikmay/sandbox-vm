@@ -2,9 +2,11 @@
 # Incus profile `agent` and network ACL `agent-egress` for agent sandboxes. Idempotent.
 # Sandboxes get: 4 GiB / 6 CPUs / 8192 processes, Docker-capable nesting, an isolated uid range,
 # no traffic to sibling sandboxes, and no traffic to private networks (LAN, VPN, the host itself)
-# except DNS and DHCP on the bridge gateway. Raise memory per sandbox with `incus config set <name> limits.memory=6GiB`.
+# except DNS, DHCP and the login proxy (scripts/logins) on the bridge gateway.
+# Raise memory per sandbox with `incus config set <name> limits.memory=6GiB`.
 set -euo pipefail
 NET=${NET:-incusbr0}
+PROXY_PORT=${PROXY_PORT:-8455}   # codex-plan-proxy on the gateway; the only host service sandboxes may reach
 
 # Editing an ACL that is in use fails on Incus 6.0.4 (nft "flush chain ... acl.<bridge>"), so
 # detach it, recreate it with all rules, and attach it again below.
@@ -14,7 +16,7 @@ fi
 incus network acl delete agent-egress >/dev/null 2>&1 || true
 gw=$(incus network get "$NET" ipv4.address | cut -d/ -f1)
 # Incus orders reject before allow, so an "allow DNS" exception never wins. Instead the gateway is
-# left out of the private ranges, and only its DNS (53) and DHCP (67) ports stay open.
+# left out of the private ranges, and only its DNS (53), DHCP (67) and login proxy ports stay open.
 IFS=. read -r a b c d <<<"$gw"
 before="10.0.0.0-$a.$b.$c.$((d-1))"; after="$a.$b.$c.$((d+1))-10.255.255.255"
 [ "$a" = 10 ] || { echo "expects the bridge in 10.0.0.0/8, got $gw"; exit 1; }
@@ -26,10 +28,10 @@ egress:
   destination: $before,$after,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,169.254.0.0/16
   state: enabled
 - action: reject
-  description: host services on the gateway, except DNS
+  description: host services on the gateway, except DNS and the login proxy
   destination: $gw/32
   protocol: tcp
-  destination_port: 1-52,54-65535
+  destination_port: 1-52,54-$((PROXY_PORT-1)),$((PROXY_PORT+1))-65535
   state: enabled
 - action: reject
   description: host services on the gateway, except DNS and DHCP
