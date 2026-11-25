@@ -7,6 +7,7 @@ Most providers don't publish their VM images:
 | Codex cloud | Yes, [`openai/codex-universal`](https://github.com/openai/codex-universal), though OpenAI notes it's "not an identical environment" to production |
 | GitHub Copilot (runner) | Yes, [`actions/runner-images`](https://github.com/actions/runner-images); the newer cloud sandbox is not |
 | exe.dev | Yes, [`boldsoftware/exeuntu`](https://github.com/boldsoftware/exeuntu) |
+| Vercel Sandbox | Yes, the images are in [`vercel/sandbox`](https://github.com/vercel/sandbox/tree/main/images) |
 | Claude Code on the web | No, only a table in the docs |
 | Devin, Cursor, Jules | No (Jules lists versions, Devin and Cursor barely mention anything) |
 | Amp orbs | No Dockerfile, though the image config can be read from the registry |
@@ -38,6 +39,7 @@ Tell it not to install anything first so we see the stock image before any setup
 | Devin | Session on this repo with an empty blueprint | Opens a PR |
 | Amp orbs | Orb on this repo, or `docker run --rm` the published image with the script mounted | Pushes a branch |
 | exe.dev | `ssh <vm>.exe.xyz 'bash -s' < scripts/probe.sh` on a fresh VM | Redirect straight to the local file |
+| Vercel Sandbox | `vercel sandbox create`, copy the script in, `vercel sandbox exec` (see [`providers/vercel-sandbox.md`](providers/vercel-sandbox.md)) | Redirect straight to the local file |
 | Local Incus | `incus exec <sandbox> -- bash -s < scripts/probe.sh` | Redirect straight to the local file |
 
 ## Before committing

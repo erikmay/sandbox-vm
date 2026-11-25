@@ -14,22 +14,23 @@ Collected on 2026-11-25. Each provider has its own page in [`providers/`](provid
 | [GitHub Copilot](providers/github-copilot.md) | Ubuntu 26.04 runner, or cloud sandbox | VM per job | 2–4 / 8–16 GB / 14 GB |
 | [Google Jules](providers/google-jules.md) | Ubuntu | short-lived VM | not documented |
 | [exe.dev](providers/exe-dev.md) | Ubuntu 24.04 (`exeuntu`) | persistent VM | plan capacity, shared |
+| [Vercel Sandbox](providers/vercel-sandbox.md) | Ubuntu 26.04 (`universal`); Amazon Linux 2023 legacy | Firecracker microVM | 1–32 vCPU, 2 GB per vCPU, 64 GB (default 2 / 4 GB) |
 
 ## Preinstalled
 
-| | Claude Code | Codex | Amp | Devin | Copilot runner | Jules | exe.dev |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Python | 3.x, uv, poetry, ruff, mypy | 3.10–3.14, uv, poetry, ruff, pyright | 3, uv | ? | 3.11–3.15 | 3.12, uv, poetry, ruff | 3, uv |
-| Node.js | 20–22, pnpm, yarn, bun | 18–24, pnpm, yarn, bun | 26, pnpm, yarn, bun | nvm | 22, 24 | 22 (18, 20), pnpm, bun | – |
-| Go | ✓ | 1.22–1.25 | – | – | 1.25–1.27 | 1.24 | ✓ |
-| Rust | ✓ | 1.83–1.95 | – | ✓ | 1.100 | 1.87 | – |
-| Java | 21 | 11–25 | – | 17 | 11–25 | 21 | – |
-| Ruby / PHP | 3.1–3.3 / 8.3 | 3.2–3.4 / 8.2–8.5 | – | – | ✓ / ✓ | – | – |
-| Docker | ✓ | – | ✓ (off) | ✓ | ✓ | ✓ | ✓ |
-| Browser | Chrome for Testing | – | agent-browser + desktop | Chrome + desktop | Chrome, Chromium, Edge | ChromeDriver only | – |
-| Databases | PostgreSQL 16, Redis 7 (stopped) | sqlite3 CLI | – | – | PostgreSQL 18, MySQL 8.4 | – | sqlite3, DuckDB |
-| `gh` CLI | ✓ (REST only) | – | ✓ (+ glab) | – | ✓ | – | ✓ |
-| Agents preinstalled | Claude Code | Codex | Amp | Devin | Copilot | Jules | Claude Code, Codex, OpenCode, pi |
+| | Claude Code | Codex | Amp | Devin | Copilot runner | Jules | exe.dev | Vercel |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Python | 3.x, uv, poetry, ruff, mypy | 3.10–3.14, uv, poetry, ruff, pyright | 3, uv | ? | 3.11–3.15 | 3.12, uv, poetry, ruff | 3, uv | 3.14, uv |
+| Node.js | 20–22, pnpm, yarn, bun | 18–24, pnpm, yarn, bun | 26, pnpm, yarn, bun | nvm | 22, 24 | 22 (18, 20), pnpm, bun | – | 24, pnpm, bun |
+| Go | ✓ | 1.22–1.25 | – | – | 1.25–1.27 | 1.24 | ✓ | – |
+| Rust | ✓ | 1.83–1.95 | – | ✓ | 1.100 | 1.87 | – | – |
+| Java | 21 | 11–25 | – | 17 | 11–25 | 21 | – | – |
+| Ruby / PHP | 3.1–3.3 / 8.3 | 3.2–3.4 / 8.2–8.5 | – | – | ✓ / ✓ | – | – | – |
+| Docker | ✓ | – | ✓ (off) | ✓ | ✓ | ✓ | ✓ | – (installable) |
+| Browser | Chrome for Testing | – | agent-browser + desktop | Chrome + desktop | Chrome, Chromium, Edge | ChromeDriver only | – | – |
+| Databases | PostgreSQL 16, Redis 7 (stopped) | sqlite3 CLI | – | – | PostgreSQL 18, MySQL 8.4 | – | sqlite3, DuckDB | sqlite3 CLI |
+| `gh` CLI | ✓ (REST only) | – | ✓ (+ glab) | – | ✓ | – | ✓ | ✓ |
+| Agents preinstalled | Claude Code | Codex | Amp | Devin | Copilot | Jules | Claude Code, Codex, OpenCode, pi | Claude Code, Codex, OpenCode, pi, fx |
 
 Cursor doesn't document what's in its default image.
 
@@ -45,6 +46,7 @@ Cursor doesn't document what's in its default image.
 | Copilot | firewall with allowlist | `copilot-setup-steps.yml` | none (runner) / snapshot (sandbox) |
 | Jules | not documented | setup script, "Run and Snapshot" | snapshot per repo |
 | exe.dev | open (egress policy optional) | image + setup script, `cp` to clone | persistent disk, `pause` keeps RAM |
+| Vercel Sandbox | open; firewall with domain/CIDR rules and credential injection optional | custom image from a Dockerfile (Vercel Container Registry) | snapshot on stop, 30 days after last use |
 
 ## Common threads
 
@@ -54,6 +56,6 @@ Customization looks almost the same everywhere: run a setup script, take a files
 
 Claude Code, Codex, and Copilot all push outbound traffic through a proxy with domain allowlists, and inject credentials at the proxy layer so secrets never sit inside the VM.
 
-Docker is available almost everywhere except Codex. Browsers (often paired with a full Linux desktop for computer use) are showing up in more of them now: Amp, Devin, and Cursor all include one.
+Docker is available almost everywhere except Codex and Vercel's default image. Browsers (often paired with a full Linux desktop for computer use) are showing up in more of them now: Amp, Devin, and Cursor all include one.
 
 Compute is modest across the board: 2–4 vCPU and 8–16 GB RAM. Most of the time the sandbox sits idle waiting on LLM responses anyway; builds and headless browsers are what actually spike usage.

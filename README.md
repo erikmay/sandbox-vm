@@ -1,6 +1,6 @@
 # sandbox-vm
 
-Notes on what hosted coding agents run inside (Claude Code on the web, Codex, Amp, Devin, Cursor, GitHub Copilot, Jules, exe.dev), a small probe script to inspect those sandboxes from the inside, and my own setup for running agent sandboxes on an old laptop with [Incus](https://linuxcontainers.org/incus/) (Debian 13 host, Ubuntu 24.04 sandboxes).
+Notes on what hosted coding agents run inside (Claude Code on the web, Codex, Amp, Devin, Cursor, GitHub Copilot, Jules, exe.dev, Vercel Sandbox), a small probe script to inspect those sandboxes from the inside, and my own setup for running agent sandboxes on an old laptop with [Incus](https://linuxcontainers.org/incus/) (Debian 13 host, Ubuntu 24.04 sandboxes).
 
 Most hosted agent providers give each session a fresh Linux machine with a bunch of preinstalled runtimes, but only a few publish what's actually in the image. I wanted to see what they ship and compare it to just running containers on hardware I already own.
 
