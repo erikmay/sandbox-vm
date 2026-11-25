@@ -6,11 +6,11 @@ Checked: 2026-11-25. Source: [environment](https://jules.google/docs/environment
 
 | | |
 | --- | --- |
-| Base | Ubuntu Linux, version not stated |
+| Base | Ubuntu Linux (version not specified) |
 | Isolation | "A secure, short-lived virtual machine" |
 | Resources | Not documented |
 
-## Preinstalled (documented versions)
+## Preinstalled (per docs)
 
 | Area | Contents |
 | --- | --- |
@@ -20,18 +20,10 @@ Checked: 2026-11-25. Source: [environment](https://jules.google/docs/environment
 | Go, Rust | Go 1.24.3, Rust 1.87.0 |
 | C/C++ | clang 18.1.3, gcc 13.3.0, cmake 3.28.3 |
 | Containers | Docker 28.2.2, Compose 2.36.2 |
-| Browser | ChromeDriver 137 listed; no browser binary named |
-| Tools | git, jq, ripgrep, tmux and similar |
+| Browser | ChromeDriver 137 listed; no browser binary mentioned |
+| Tools | git, jq, ripgrep, tmux, etc. |
 | Databases | None listed |
 
 ## Customization and lifetime
 
-- A setup script in the repo's configuration ("Initial Setup").
-- "Run and Snapshot" saves a snapshot reused for later tasks on that repo;
-  "Run to Validate" only tests the script.
-- VMs are short-lived; only the snapshot carries over. Network policy and
-  retention are not documented.
-
-## Ground truth
-
-Docs describe the image; the probe shows it. Run [`scripts/probe.sh`](../../scripts/probe.sh) inside a session as described in [`METHOD.md`](../METHOD.md) and commit the result to `research/probes/google-jules/`.
+Each repo can have an "Initial Setup" script. "Run and Snapshot" saves a snapshot reused for later tasks on that repo, while "Run to Validate" just tests the script without saving. VMs are short-lived and only the snapshot persists. Network rules and snapshot retention aren't documented.

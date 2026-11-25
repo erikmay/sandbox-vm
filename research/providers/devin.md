@@ -10,45 +10,32 @@ Checked: 2026-11-25. Sources:
 [secrets](https://docs.devin.ai/product-guides/secrets),
 [browser previews](https://docs.devin.ai/work-with-devin/browser-previews).
 
-Devin does not publish a full list of its base image. Most of the software
-below comes from notes in the setup templates.
+Devin doesn't publish a base image manifest; most of the details below are pieced together from their setup templates.
 
 ## Machine
 
 | | |
 | --- | --- |
-| Base | "A Linux-based virtual machine". Older versions of the docs said Ubuntu 22.04, x86_64; the current pages no longer state a version |
-| Other OS | Windows and macOS VMs, opt-in with `runs-on` |
+| Base | "A Linux-based virtual machine" (older docs said Ubuntu 22.04 x86_64; current docs drop the version) |
+| Other OS | Windows and macOS VMs, opt-in via `runs-on` |
 | Isolation | VM |
 | Resources | Not documented |
-| User | `ubuntu` (inferred from paths like `/home/ubuntu/...`), repos in `~/repos/` |
+| User | `ubuntu` (based on `/home/ubuntu/...` paths), repos cloned under `~/repos/` |
 
 ## Preinstalled
 
 | Area | Contents |
 | --- | --- |
-| Languages | OpenJDK 17, Rust (rustup, stable), nvm. Python and Node versions not listed |
+| Languages | OpenJDK 17, Rust (rustup, stable), nvm. Python and Node versions aren't listed |
 | Tools | awscli, direnv (hooked into the shell), bash |
-| Docker | Supported (templates configure `/etc/docker/daemon.json`) |
+| Docker | Supported (templates edit `/etc/docker/daemon.json`) |
 | Browser | Chrome with remote debugging (CDP) on port 29229 |
-| Desktop | A full Linux desktop at 1024×768 for computer use |
-| Access | SSH into a running session's VM |
+| Desktop | Full Linux desktop at 1024×768 for computer use |
+| Access | Direct SSH into a running session's VM |
 | Databases | None documented |
 
 ## Customization and lifetime
 
-- **Blueprints** (YAML, organization, repo and workspace level):
-  `initialize` (system tools, runtimes), `maintenance` (dependencies, run
-  during builds), `knowledge` (lint, test, build commands given to Devin).
-- Setup is done by asking Devin to set up the repo; it proposes changes and
-  builds the image.
-- Secrets are encrypted, passed as environment variables, and removed from
-  the saved image.
-- One active snapshot per organization and platform; every session boots a
-  fresh copy. Builds run on blueprint changes and about every 24 hours.
-- The machine sleeps when idle and wakes for browser previews.
-- Self-hosted machines are possible ("Outposts").
+Configured through YAML **Blueprints** (org, repo, or workspace level) split into `initialize` (system packages/runtimes), `maintenance` (dependencies run during builds), and `knowledge` (lint/test/build commands). Usually you just ask Devin to set up the repo and it proposes the blueprint and builds the image.
 
-## Ground truth
-
-Docs describe the image; the probe shows it. Run [`scripts/probe.sh`](../../scripts/probe.sh) inside a session as described in [`METHOD.md`](../METHOD.md) and commit the result to `research/probes/devin/`.
+Secrets are encrypted, injected as env vars, and stripped from the saved snapshot. Each org and platform keeps one active snapshot, rebuilt on blueprint changes and roughly every 24 hours; sessions boot a fresh copy. Idle VMs sleep and wake back up for browser previews. Self-hosted runners ("Outposts") are also available.

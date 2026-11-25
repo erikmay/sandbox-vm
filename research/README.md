@@ -1,20 +1,17 @@
-# Research: what remote agent providers put in their sandboxes
+# Provider research
 
-Snapshot of 2026-11-25. Each provider has a page in [`providers/`](providers/)
-with sources, the full tool list, network policy and customization model.
-Providers change their images often: every page has a "Checked" date, and the
-live docs win over this file.
+Collected on 2026-11-25. Each provider has its own page in [`providers/`](providers/) with links to the docs, installed tools, network restrictions, and how customization works. Images change without much notice, so check the date on each page and treat the live docs (or a fresh probe) as authoritative.
 
 ## Machines
 
 | Provider | Base | Isolation | vCPU / RAM / disk |
 | --- | --- | --- | --- |
 | [Claude Code on the web](providers/claude-code-web.md) | Ubuntu 24.04 | VM per session | 4 / 16 GB / 30 GB |
-| [Codex cloud](providers/codex-cloud.md) | Ubuntu 24.04 (`codex-universal`) | VM per task (container in the legacy docs) | 2–4 / 8–16 GiB / 8–32 GiB by plan |
+| [Codex cloud](providers/codex-cloud.md) | Ubuntu 24.04 (`codex-universal`) | VM per task (container in legacy docs) | 2–4 / 8–16 GiB / 8–32 GiB by plan |
 | [Amp orbs](providers/amp-orbs.md) | Debian 13 | container with systemd | not documented |
-| [Devin](providers/devin.md) | Linux (formerly Ubuntu 22.04); Windows and macOS opt-in | VM | not documented |
-| [Cursor Cloud Agents](providers/cursor-cloud-agents.md) | Ubuntu (24.04 likely) | VM, container inside | not documented |
-| [GitHub Copilot](providers/github-copilot.md) | Ubuntu 26.04 runner, or a cloud sandbox | VM per job | 2–4 / 8–16 GB / 14 GB |
+| [Devin](providers/devin.md) | Linux (formerly Ubuntu 22.04); Windows/macOS opt-in | VM | not documented |
+| [Cursor Cloud Agents](providers/cursor-cloud-agents.md) | Ubuntu (likely 24.04) | VM, container inside | not documented |
+| [GitHub Copilot](providers/github-copilot.md) | Ubuntu 26.04 runner, or cloud sandbox | VM per job | 2–4 / 8–16 GB / 14 GB |
 | [Google Jules](providers/google-jules.md) | Ubuntu | short-lived VM | not documented |
 | [exe.dev](providers/exe-dev.md) | Ubuntu 24.04 (`exeuntu`) | persistent VM | plan capacity, shared |
 
@@ -34,14 +31,14 @@ live docs win over this file.
 | `gh` CLI | ✓ (REST only) | – | ✓ (+ glab) | – | ✓ | – | ✓ |
 | Agents preinstalled | Claude Code | Codex | Amp | Devin | Copilot | Jules | Claude Code, Codex, OpenCode, pi |
 
-Cursor does not document its default image.
+Cursor doesn't document what's in its default image.
 
 ## Network and customization
 
 | | Default network | Setup mechanism | Saved state |
 | --- | --- | --- | --- |
-| Claude Code | allowlist (~200 domains) through a proxy; GitHub credentials stay outside the VM | setup script, `SessionStart` hooks | filesystem snapshot, ~7 days |
-| Codex | package-manager preset or full; secrets substituted by the proxy | install script, start skill, `CODEX_ENV_*` versions | up to 7 days |
+| Claude Code | allowlist (~200 domains) via proxy; GitHub credentials stay outside the VM | setup script, `SessionStart` hooks | filesystem snapshot, ~7 days |
+| Codex | package-manager preset or full; proxy substitutes secrets | install script, start skill, `CODEX_ENV_*` versions | up to 7 days |
 | Amp | open | per-repo orb kit | – |
 | Devin | open | blueprints (`initialize`, `maintenance`, `knowledge`) | one snapshot per org, rebuilt daily |
 | Cursor | open, allowlist optional | Dockerfile or `environment.json` | snapshot, deleted after 30 days unused |
@@ -49,19 +46,14 @@ Cursor does not document its default image.
 | Jules | not documented | setup script, "Run and Snapshot" | snapshot per repo |
 | exe.dev | open (egress policy optional) | image + setup script, `cp` to clone | persistent disk, `pause` keeps RAM |
 
-## Patterns
+## Common threads
 
-1. **Polyglot images with version managers** (pyenv, nvm, mise, rustup) are
-   the norm. Amp and Devin are leaner; Copilot reuses a CI image that is far
-   larger than an agent needs.
-2. **Setup script, then snapshot, then a fresh copy per session.** Every
-   provider customizes this way. Only the trigger differs (on change, daily,
-   on demand).
-3. **Egress control through a proxy** at the security-focused providers
-   (Claude Code, Codex, Copilot), with credentials injected by the proxy
-   instead of stored in the sandbox.
-4. **Docker** is almost always available; Codex is the exception.
-5. **A browser, often with a full desktop,** is becoming standard for
-   testing and computer use (Amp, Devin, Cursor).
-6. **Resources are small:** 2–4 vCPU and 8–16 GB per sandbox. Agents wait
-   on the model most of the time; builds and browsers set the peak.
+Most providers ship a heavy polyglot image with version managers (pyenv, nvm, mise, rustup) preloaded. Amp and Devin keep theirs much smaller, while Copilot just reuses a GitHub Actions CI runner image that has way more stuff than a coding agent needs.
+
+Customization looks almost the same everywhere: run a setup script, take a filesystem snapshot, and boot new sessions from a copy of that snapshot. The main difference is when snapshots get rebuilt (on config change, daily, or manually).
+
+Claude Code, Codex, and Copilot all push outbound traffic through a proxy with domain allowlists, and inject credentials at the proxy layer so secrets never sit inside the VM.
+
+Docker is available almost everywhere except Codex. Browsers (often paired with a full Linux desktop for computer use) are showing up in more of them now: Amp, Devin, and Cursor all include one.
+
+Compute is modest across the board: 2–4 vCPU and 8–16 GB RAM. Most of the time the sandbox sits idle waiting on LLM responses anyway; builds and headless browsers are what actually spike usage.

@@ -1,63 +1,47 @@
-# How to analyze a provider's sandbox
+# Probing provider sandboxes
 
-Most providers do not publish their images:
+Most providers don't publish their VM images:
 
 | Provider | Image public? |
 | --- | --- |
-| Codex cloud | Yes, [`openai/codex-universal`](https://github.com/openai/codex-universal), but OpenAI says it is "not an identical environment" to production |
+| Codex cloud | Yes, [`openai/codex-universal`](https://github.com/openai/codex-universal), though OpenAI notes it's "not an identical environment" to production |
 | GitHub Copilot (runner) | Yes, [`actions/runner-images`](https://github.com/actions/runner-images); the newer cloud sandbox is not |
 | exe.dev | Yes, [`boldsoftware/exeuntu`](https://github.com/boldsoftware/exeuntu) |
-| Claude Code on the web | No, only a documented table |
-| Devin, Cursor, Jules | No (Jules documents versions, Devin and Cursor barely) |
-| Amp orbs | No Dockerfile; the image config is readable from the registry |
+| Claude Code on the web | No, only a table in the docs |
+| Devin, Cursor, Jules | No (Jules lists versions, Devin and Cursor barely mention anything) |
+| Amp orbs | No Dockerfile, though the image config can be read from the registry |
 
-So docs are a starting point, and the ground truth comes from **inside** the
-sandbox: we let the provider's own agent run
-[`../scripts/probe.sh`](../scripts/probe.sh) and commit the output.
+Because of that, the easiest way to see what's actually installed is to run [`../scripts/probe.sh`](../scripts/probe.sh) from inside a session and have the agent commit the output.
 
-## Why a file in the repo, not the chat
+Committing the output as a file works much better than pasting it into chat. The report is a few hundred lines long, chat UIs often truncate or reformat tool output, and having files in git makes it easy to diff when a provider updates their image later. If an agent can't push a branch, pasting from chat into the file manually still works as a fallback.
 
-- The output is long (hundreds of lines); chat UIs truncate or summarize it.
-- A committed file can be diffed against the next probe, so changes in the
-  provider's image show up as a diff.
-- Some providers redact or reformat tool output in chat.
+## Prompt to use
 
-Asking in chat still works as a fallback (see the prompt below); paste the
-answer into the probe file by hand.
-
-## Standard prompt
-
-Give every agent the same prompt, on a branch of this repository:
+Run this on a branch of this repo:
 
 > Run `bash scripts/probe.sh > research/probes/<provider>/<YYYY-MM-DD>.md`
 > without changing the script. Do not install anything before you run it.
 > Commit only that file and open a pull request (or push the branch). Then
 > reply with the first 40 lines of the file.
 
-"Do not install anything" matters: we want the image as the provider ships
-it, before the agent's own setup. Run it once without a setup script, and
-optionally a second time after your usual setup script (`<date>-setup.md`).
+Tell it not to install anything first so we see the stock image before any setup script touches it. If you also want to capture your customized environment, run a second probe afterward and save it as `<date>-setup.md`.
 
-## Per provider
+## Where to run it per provider
 
-| Provider | Where to run it | How the result comes back |
+| Provider | Where to start | How to get the file back |
 | --- | --- | --- |
-| Claude Code on the web | New session on this repo at claude.ai/code, environment without a setup script, network "Full" for the network section | Session pushes a branch (`claude/...`), open a PR |
-| Codex cloud | Task on this repo in chatgpt.com/codex, environment without setup script; run once with internet off and once on | Codex creates a PR |
-| GitHub Copilot | Assign an issue with the prompt to Copilot. Without `copilot-setup-steps.yml` it runs on the default runner or cloud sandbox | Copilot opens a PR |
-| Google Jules | Task on this repo, no setup script configured | Jules publishes a branch / PR |
-| Cursor Cloud Agents | Cloud agent on this repo with the default image (no `environment.json`) | Agent pushes a branch |
-| Devin | Session on this repo with an empty blueprint | Devin opens a PR |
-| Amp orbs | Orb on this repo; or `docker run --rm` the published image with the script mounted | Amp pushes a branch |
-| exe.dev | `ssh <vm>.exe.xyz 'bash -s' < scripts/probe.sh` on a fresh VM | Redirect to the file locally |
-| Own Incus sandboxes | `incus exec <sandbox> -- bash -s < scripts/probe.sh` | Redirect to the file locally |
+| Claude Code on the web | New session on this repo at claude.ai/code, no setup script, network set to "Full" for the network checks | Pushes a `claude/...` branch, open a PR |
+| Codex cloud | Task on this repo at chatgpt.com/codex, no setup script; worth running once offline and once with internet on | Opens a PR |
+| GitHub Copilot | Assign an issue with the prompt to Copilot (without `copilot-setup-steps.yml` it uses the default runner or cloud sandbox) | Opens a PR |
+| Google Jules | Task on this repo with no setup script | Pushes a branch / PR |
+| Cursor Cloud Agents | Cloud agent on this repo with the default image (no `environment.json`) | Pushes a branch |
+| Devin | Session on this repo with an empty blueprint | Opens a PR |
+| Amp orbs | Orb on this repo, or `docker run --rm` the published image with the script mounted | Pushes a branch |
+| exe.dev | `ssh <vm>.exe.xyz 'bash -s' < scripts/probe.sh` on a fresh VM | Redirect straight to the local file |
+| Local Incus | `incus exec <sandbox> -- bash -s < scripts/probe.sh` | Redirect straight to the local file |
 
-## Rules
+## Before committing
 
-- The probe is read-only and prints environment variable **names** only.
-  Still read the output before you commit it: hostnames, internal IPs or
-  account names can appear in paths or the network section. Redact them.
-- Record the date, the plan tier (resources differ by plan) and whether
-  internet was on.
-- Update the provider page in [`providers/`](providers/) from the probe and
-  set its "Checked" date.
+`probe.sh` doesn't modify anything and only prints environment variable names, not values. Still check the file before committing, since hostnames, internal IPs, or usernames can show up in paths or the network section.
+
+Note the date, the plan tier (since CPU/RAM vary by plan), and whether internet access was enabled, then update the corresponding page in [`providers/`](providers/) and bump its "Checked" date.

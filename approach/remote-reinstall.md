@@ -1,61 +1,47 @@
-# Remote reinstall to Debian 13 (headless)
+# Remote headless reinstall to Debian 13
 
-How to turn a machine that runs some Linux into an encrypted Debian 13 host
-without anyone at the keyboard. The installer runs unattended (preseed) from
-a boot entry added to the old system's boot loader. Done once on 2026-11-25:
-Omarchy (Arch Linux, Limine) to Debian 13 on a laptop in a rack, in about
-7 minutes of install time.
+How I converted a headless Linux box (Omarchy / Arch Linux with Limine) into an encrypted Debian 13 host over SSH, without physical access. The installer boots unattended from a preseed initrd added to the existing boot loader. The actual install took about 7 minutes.
 
-You need: SSH and sudo on the old system, a UEFI boot loader you can edit,
-wired LAN with DHCP, and a client in the same LAN for the first unlock.
-Templates: [`../scripts/debian-preseed/`](../scripts/debian-preseed/).
+Requirements: SSH + sudo on the current OS, a UEFI boot loader you can edit, wired Ethernet with DHCP, and another machine on the same LAN for the first LUKS unlock. Templates are in [`../scripts/debian-preseed/`](../scripts/debian-preseed/).
 
-## What the host gets
+## Target setup
 
-| Area | Result |
-| --- | --- |
-| OS | Debian 13 (trixie), no desktop, `en_US.UTF-8`, German keymap, Europe/Berlin (edit the template) |
-| Disk | Whole disk wiped. GPT: ESP 1 GB, `/boot` 1 GB, LUKS2, LVM `vg0` with `root` 100 GB and `swap` 16 GB; the rest of `vg0` stays free |
-| User | `admin` with sudo and a password; `root` locked. `admin` is reserved in debian-installer, so `late.sh` creates it |
-| SSH | Key only, no root login |
-| Unlock | dropbear in the initramfs on port 2222, key only, forced to `cryptroot-unlock` |
-| Laptop in a rack | Lid switch ignored, sleep targets masked, battery charge limit 60 % |
-| Updates | `unattended-upgrades` for security, no automatic reboot |
+- **OS:** Debian 13 (trixie), no desktop, `en_US.UTF-8`, German keymap, `Europe/Berlin` (adjust in the template).
+- **Disk:** Full wipe. GPT with 1 GB ESP, 1 GB `/boot`, LUKS2, and LVM `vg0` containing 100 GB `root` and 16 GB `swap`. The rest of `vg0` stays unallocated for Incus.
+- **User:** `admin` with sudo and a password; `root` locked. Because `debian-installer` reserves the name `admin`, `late.sh` creates the account after install.
+- **SSH:** Key-only auth, no root login.
+- **Boot unlock:** dropbear in the initramfs on port 2222, key-only, forced to `cryptroot-unlock`.
+- **Laptop tweaks:** Ignore lid close, mask sleep/suspend targets, cap battery charge at 60%.
+- **Updates:** `unattended-upgrades` for security patches, no automatic reboots.
 
-## 0. Before you start
+## 0. Prep work
 
-- Back up what you keep, at least the SSH host keys (`/etc/ssh/ssh_host_*`)
-  and VPN keys, so clients see the same host afterwards. Delete the backup
-  once the new system works; it holds private keys.
-- Note the disk name (`lsblk`). A USB stick shows as `/dev/sda`; the preseed
-  names the disk explicitly.
-- Generate an admin password and a LUKS passphrase and store them in your
-  password manager first. Read them back and compare.
+Back up `/etc/ssh/ssh_host_*` and any VPN keys so clients still recognize the host after the wipe. Delete the backup once the new system is up.
 
-## 1. Installer and preseed
+Check `lsblk` for the exact target disk name. A plugged-in USB stick will show up as `/dev/sda`, and the preseed writes directly to the device you pass in.
+
+Generate the admin password and LUKS passphrase and save them in your password manager before doing anything else. Read them back to be sure.
+
+## 1. Download the installer and build the preseed initrd
 
 ```sh
 B=https://deb.debian.org/debian/dists/trixie/main/installer-amd64/current/images
 curl -fsSLO $B/SHA256SUMS
 curl -fsSL -o linux     $B/netboot/debian-installer/amd64/linux
 curl -fsSL -o initrd.gz $B/netboot/debian-installer/amd64/initrd.gz
-# check both against SHA256SUMS (./netboot/debian-installer/amd64/...)
+# verify both against SHA256SUMS (./netboot/debian-installer/amd64/...)
 
 openssl passwd -6 -stdin < admin.pw > admin.hash
 scripts/debian-preseed/render.py <hostname> /dev/nvme0n1 admin.hash luks.pw ~/.ssh/id_ed25519.pub out/
 (cd out && printf '%s\n' preseed.cfg late.sh | bsdcpio -o --format newc | gzip -9) > extra.gz
-cat initrd.gz extra.gz > initrd-preseed.gz   # the installer reads /preseed.cfg
+cat initrd.gz extra.gz > initrd-preseed.gz   # debian-installer picks up /preseed.cfg
 ```
 
-The firmware archive (about 500 MB) is not needed for common USB LAN
-adapters (`r8152`); the installed system gets firmware from
-`non-free-firmware`.
+You don't need the ~500 MB firmware bundle for common USB Ethernet adapters (`r8152`). The installed system pulls firmware from `non-free-firmware`.
 
-## 2. Dry run in a VM (do not skip)
+## 2. Dry run in QEMU (don't skip this)
 
-On the old system with QEMU and OVMF, with **test** passwords and `/dev/vda`
-as the disk. Give the test disk the same shape as the real one (GPT, ESP, a
-LUKS partition):
+Run the rendered preseed inside QEMU with OVMF on the existing machine first, using dummy passwords and `/dev/vda`. Give `disk.raw` the same starting layout as the real disk (GPT, ESP, a LUKS partition):
 
 ```sh
 qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 4 -m 3072 \
@@ -67,21 +53,13 @@ qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 4 -m 3072 \
   -display none -serial file:serial.log -no-reboot -daemonize
 ```
 
-Watch `serial.log` for `!!` or `[Press enter to continue]`: each is a
-question the preseed does not answer. Then boot the disk without `-kernel`
-and check the unlock (`ssh -J <old-host> -p 22222 root@127.0.0.1`), the
-login on port 22223, `sudo`, `passwd -S root` (`L`), and free space in `vg0`
-(`vgs`).
+Watch `serial.log` for `!!` or `[Press enter to continue]`; any of those means the preseed missed a prompt. Once it finishes, boot `disk.raw` without `-kernel` and verify dropbear unlock (`ssh -J <old-host> -p 22222 root@127.0.0.1`), SSH login on port 22223, `sudo`, `passwd -S root` (`L`), and that `vgs` shows free space in `vg0`.
 
-Our dry run found two errors that would have stopped the real install: the
-reserved user name `admin`, and swap taking all free space (fixed with
-`partman-auto-lvm/guided_size`).
+This dry run caught two blockers on my first try: `admin` being reserved in `debian-installer`, and swap eating the entire volume group without `partman-auto-lvm/guided_size`.
 
 ## 3. Boot into the installer
 
-Shred the rendered files once the initrd is built. Copy `linux` and
-`initrd-preseed.gz` to the ESP and make a boot entry the default. With
-Limine:
+Shred the rendered files in `out/` once `initrd-preseed.gz` is built. Copy `linux` and `initrd-preseed.gz` onto the ESP and add a default boot entry. With Limine:
 
 ```text
 /Debian 13 Installer (unattended)
@@ -91,13 +69,9 @@ Limine:
     cmdline: auto=true priority=critical
 ```
 
-Put it above the first entry and set `default_entry: 1`. Stop anything that
-rewrites the boot config (for example `limine-snapper-sync`). Keep a copy of
-the old config; until the reboot, everything can be undone.
+Put it at the top and set `default_entry: 1`. Disable anything that regenerates the boot config (like `limine-snapper-sync`) and keep a backup of the old config until you actually reboot.
 
-The installer loads into RAM, then wipes the disk including the ESP. From a
-client in the LAN: the machine answers ping without SSH while it installs,
-disappears when it reboots, and comes back with port 2222 open.
+After rebooting, the installer loads into RAM and wipes the disk, including the ESP. From another box on the LAN, the machine responds to ping (no SSH) while installing, drops off during reboot, and comes back up with port 2222 open.
 
 ## 4. First boot
 
@@ -106,17 +80,10 @@ printf '%s' "$LUKS_PASSPHRASE" | ssh -p 2222 root@<lan-ip>   # no trailing newli
 ssh admin@<lan-ip>
 ```
 
-Restore the SSH host keys (root, 600 / 644; `sshd -t`, restart `ssh`) and
-the VPN config, delete stale UEFI entries with `efibootmgr`, and check
-`lsblk`, `vgs`, `systemctl --failed`. Then install Incus:
-[`../scripts/incus/setup.sh`](../scripts/incus/setup.sh).
+Restore the SSH host keys (owned by root, `600` / `644`, check with `sshd -t` and restart `ssh`) and VPN config. Clean up old UEFI boot entries with `efibootmgr`, sanity-check `lsblk`, `vgs`, and `systemctl --failed`, then run [`../scripts/incus/setup.sh`](../scripts/incus/setup.sh).
 
-## Limits
+## Caveats
 
-- Unlock after a reboot needs a client in the LAN: no VPN runs in the
-  initramfs. TPM2 auto-unlock (`systemd-cryptenroll --tpm2-device=auto`) is
-  the next step.
-- The preseed picks the first wired interface with a link; Wi-Fi stays
-  unconfigured.
-- If the installer stops on a question, the machine has no OS until someone
-  boots it from a USB stick. The dry run is what makes this unlikely.
+- Reboot unlocking requires a machine on the local LAN since no VPN runs in the initramfs. Enrolling TPM2 (`systemd-cryptenroll --tpm2-device=auto`) avoids this later.
+- The preseed picks the first wired NIC with link; Wi-Fi is left unconfigured.
+- If the installer stalls on an unanswered prompt after wiping the disk, you'll need physical access and a USB stick to recover. That's why the QEMU dry run matters.

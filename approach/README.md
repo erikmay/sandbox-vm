@@ -1,23 +1,12 @@
-# Our approach: agent sandboxes on our own hardware
+# Self-hosted sandboxes with Incus
 
-What we run instead of (or next to) hosted agent VMs: an old laptop in a
-rack, reinstalled remotely with Debian 13, running [Incus](https://linuxcontainers.org/incus/)
-system containers as sandboxes. Written down on 2026-11-25.
+Instead of paying per-session for hosted agent VMs, I took an old laptop, put it in a rack, reinstalled it remotely with Debian 13, and set up [Incus](https://linuxcontainers.org/incus/) system containers as sandboxes.
 
-## Why
+A used 8-core laptop has more CPU and RAM than the entry-level hosted tiers (2–4 vCPU, 8–16 GB) and costs basically nothing to keep running. Starting a fresh container takes about 4 seconds ([`../benchmarks/incus-lifecycle.md`](../benchmarks/incus-lifecycle.md)), compared to ~30 seconds on the hosted VMs I tested. I also get full control over the base image, networking, and how long state sticks around.
 
-- **Cost and capacity:** a used 8-core laptop has more RAM and CPU than the
-  small tiers of the hosted providers (2–4 vCPU, 8–16 GB per sandbox) and
-  runs any number of sandboxes for the price of electricity.
-- **Speed:** a new sandbox is ready in about 4 seconds, measured
-  ([`../benchmarks/incus-lifecycle.md`](../benchmarks/incus-lifecycle.md)).
-  The hosted VMs we tried took about 30 seconds.
-- **Control:** our own base image, our own network rules, persistent state
-  as long as we want it, SSH and every tool we like.
-- **Trade-off:** we run the hardware, the updates and the backups ourselves,
-  and the sandboxes share one host kernel (containers, not VMs).
+The obvious downside is maintaining the hardware, updates, and backups myself. Also, because these are containers rather than VMs, sandboxes share the host kernel.
 
-## Architecture
+## Setup overview
 
 ```
  operator Mac ──SSH (VPN or LAN)──▶ host: Debian 13, LUKS + LVM
@@ -30,63 +19,46 @@ system containers as sandboxes. Written down on 2026-11-25.
                                      │   └─ sandbox-2   copy of base, running
 ```
 
-| Layer | Choice | Reason |
-| --- | --- | --- |
-| Host OS | Debian 13, no desktop | Stable, small, unattended security updates; Incus 6.0 LTS is in the main archive |
-| Disk | LUKS2 + LVM; root 100 GB, swap 16 GB, the rest for sandboxes | Encrypted at rest; LVM thin snapshots make copies instant |
-| Unlock | dropbear in the initramfs, key only, forced to `cryptroot-unlock` | Reboots need no keyboard at the rack (TPM2 auto-unlock is the next step) |
-| Sandboxes | Incus system containers, unprivileged, `security.nesting=true` | Full systemd userland, ~50–100 MB overhead each, Docker inside works |
-| Limits | 6 CPU, 6 GiB RAM, 40 GiB disk per sandbox (profile default) | A runaway build cannot take the host down |
-| Base image | `images:debian/13`, nothing added | A clean start; tools are added in layers, not baked into everything |
-| Network | NAT bridge; sandboxes reach the internet, not each other's files | Simple default; Incus network ACLs can restrict egress later |
+- **Host OS:** Headless Debian 13. Small footprint, unattended security updates, and Incus 6.0 LTS is in the main apt repo.
+- **Disk:** LUKS2 with LVM on top: 100 GB for root, 16 GB swap, and the rest left in an LVM thin pool so container copies are instant snapshots.
+- **Remote unlock:** dropbear in the initramfs on port 2222, key-only, forced to `cryptroot-unlock` so reboots don't need physical access. TPM2 auto-unlock is on the todo list.
+- **Sandboxes:** Unprivileged Incus system containers with `security.nesting=true`. Full systemd inside, ~50–100 MB RAM overhead each, and Docker works inside them.
+- **Limits:** Default profile caps each container at 6 CPUs, 6 GiB RAM, and 40 GiB disk so a runaway build won't wedge the host.
+- **Base image:** Plain `images:debian/13` with nothing preinstalled. Tools go in separate layers instead of baking everything into one giant image.
+- **Network:** Standard NAT bridge (`incusbr0`). Sandboxes can reach the internet; egress restrictions via Incus network ACLs can be added later if needed.
 
-## Layers (following the providers' pattern)
+## Image layering
 
-1. **`base`:** the clean distribution image. Never changed.
-2. **`base-agent`** (optional): what every provider has in common: git, gh,
-   ripgrep, jq, Python with uv, Node with pnpm, Docker, Claude Code, Codex.
-3. **Per project:** a setup script, then `incus snapshot`; sessions are
-   copies of that snapshot.
+Following roughly what the hosted providers do:
 
-Reset a sandbox to a clean state with `incus snapshot restore` (about 4.5 s)
-instead of rebuilding it.
+1. `base`: stock `images:debian/13`, never modified.
+2. `base-agent` (optional): the common baseline (git, gh, ripgrep, jq, Python + uv, Node + pnpm, Docker, Claude Code, Codex).
+3. Per-project containers: run the repo's setup script, take an `incus snapshot`, and clone from that for individual sessions.
 
-## Setup
+Resetting a dirty sandbox takes ~4.5 seconds with `incus snapshot restore`, which beats rebuilding from scratch.
 
-1. **Reinstall the host remotely**: [`remote-reinstall.md`](remote-reinstall.md).
-   Unattended Debian install started from the running old OS, tested in a
-   QEMU dry run first. Templates in [`../scripts/debian-preseed/`](../scripts/debian-preseed/).
-2. **Install Incus**: [`../scripts/incus/`](../scripts/incus/): an LVM thin
-   pool on the free space of the volume group, then `incus admin init --preseed`.
-3. **Create sandboxes**:
+## Steps
+
+1. Reinstall the host remotely using [`remote-reinstall.md`](remote-reinstall.md) and the preseed templates in [`../scripts/debian-preseed/`](../scripts/debian-preseed/). Test in QEMU first.
+2. Set up the LVM thin pool and run `incus admin init --preseed` using [`../scripts/incus/`](../scripts/incus/).
+3. Create the base image and spin up a sandbox:
    ```sh
    incus init images:debian/13 base
    incus copy base sandbox-1 && incus start sandbox-1
    incus shell sandbox-1
    ```
 
-## Capacity (8-core Ryzen 7 5700U, 16 GB RAM)
+## Capacity on an 8-core Ryzen 7 5700U (16 GB RAM)
 
-- An empty sandbox uses about 50–100 MB RAM; 8 running empty sandboxes left
-  14 GB free.
-- RAM is the limit, not CPU or disk. A coding agent needs about 0.3–0.6 GB
-  for the CLI, 1.5–2.5 GB while it builds, and 2.5–4 GB with a browser.
-- Estimate: 4–5 agents working in parallel comfortably, 6–8 with light work,
-  2–3 with browser tests or large builds. Lower `limits.memory` to 3–4 GiB
-  when more than four run.
-- A 15 W laptop chip throttles under long full load with the lid closed:
-  parallel builds take longer, they do not fail.
+An idle container uses around 50–100 MB of RAM. With 8 empty containers running, the host still had 14 GB free.
 
-## Lessons
+RAM is the real bottleneck, not CPU or disk. A coding agent CLI uses roughly 0.3–0.6 GB, a build pushes that to 1.5–2.5 GB, and running a headless browser brings it to 2.5–4 GB. In practice this box comfortably handles 4–5 active agents at once, 6–8 if they're doing light work, or 2–3 if they're running browser tests or heavy builds. If you run more than four, drop `limits.memory` to 3–4 GiB.
 
-- **Dry-run the preseed in a VM on the old system first.** It found two
-  errors that would have stopped the real install: the user name `admin` is
-  reserved in debian-installer, and LVM gave all free space to swap unless
-  `partman-auto-lvm/guided_size` is set.
-- **Pipe the LUKS passphrase without a trailing newline** to
-  `cryptroot-unlock`, or it fails.
-- **Keep the old SSH host keys and VPN keys** and restore them after the
-  reinstall, so clients see the same host.
-- **Unlock over the network needs a network in the initramfs:** add the NIC
-  driver (`r8152` for Realtek USB LAN) to `/etc/initramfs-tools/modules` and
-  set `IP=dhcp`. A VPN does not run there, so unlock works only from the LAN.
+A 15 W laptop CPU with the lid closed will thermal-throttle under sustained all-core load, so parallel builds slow down a bit, though they still finish fine.
+
+## Things I ran into
+
+- Testing the preseed in a QEMU VM on the old OS first saved me from bricking the box remotely. It caught two issues immediately: `admin` is a reserved username in `debian-installer`, and LVM gave all remaining free space to swap unless `partman-auto-lvm/guided_size` was explicitly set.
+- `cryptroot-unlock` fails if you send a trailing newline with the LUKS passphrase. Use `printf '%s'`.
+- Back up the old SSH host keys and VPN keys before wiping and restore them afterward so clients don't complain about changed host keys.
+- Remote LUKS unlock needs networking inside the initramfs: add the NIC driver (e.g. `r8152` for Realtek USB Ethernet) to `/etc/initramfs-tools/modules` and set `IP=dhcp`. Because no VPN runs in the initramfs, unlocking only works from the local LAN.

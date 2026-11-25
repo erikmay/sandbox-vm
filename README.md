@@ -1,45 +1,32 @@
 # sandbox-vm
 
-What the big remote coding agents run in, and how to run the same kind of
-sandbox on your own hardware.
+Notes on what hosted coding agents run inside (Claude Code on the web, Codex, Amp, Devin, Cursor, GitHub Copilot, Jules, exe.dev), a small probe script to inspect those sandboxes from the inside, and my own setup for running agent sandboxes on an old laptop with Debian 13 and [Incus](https://linuxcontainers.org/incus/).
 
-Claude Code, Codex, Amp, Devin, Cursor, Copilot and Jules all give their
-agent a fresh Linux machine with a preinstalled toolchain. Most of them do not
-publish what is in it. This repository collects it, gives you a probe to read
-it from inside any sandbox, and documents a self-hosted alternative: an old
-laptop with Debian 13 and [Incus](https://linuxcontainers.org/incus/), where a
-new sandbox is ready in about 4 seconds.
+Most hosted agent providers give each session a fresh Linux machine with a bunch of preinstalled runtimes, but only a few publish what's actually in the image. I wanted to see what they ship and compare it to just running containers on hardware I already own.
 
-## Contents
+## What's in here
 
-| Folder | What |
-| --- | --- |
-| [`research/`](research/) | Comparison of the providers' sandboxes (OS, resources, runtimes, Docker, browsers, network, customization), one page per provider |
-| [`research/METHOD.md`](research/METHOD.md) | How to read a provider's real image: let its own agent run the probe and commit the result |
-| [`research/probes/`](research/probes/) | Probe results, one folder per provider and date |
-| [`approach/`](approach/) | Our self-hosted setup: architecture, layers, capacity, lessons |
-| [`approach/remote-reinstall.md`](approach/remote-reinstall.md) | Reinstall a headless machine to encrypted Debian 13 over SSH, with a QEMU dry run first |
-| [`benchmarks/`](benchmarks/) | Measured create, delete, parallel and reset times for Incus sandboxes |
-| [`scripts/`](scripts/) | `probe.sh`, the Debian preseed templates, Incus setup and benchmark |
+- [`research/`](research/): comparison across providers (OS, CPU/RAM, installed runtimes, Docker, browsers, databases, network rules, setup scripts) with a separate page per provider.
+- [`research/METHOD.md`](research/METHOD.md): how to inspect a provider's actual image by having the agent run the probe script and commit the output.
+- [`research/probes/`](research/probes/): raw probe outputs, grouped by provider and date.
+- [`approach/`](approach/): the self-hosted Incus setup on a spare laptop, capacity notes, and things that went wrong during setup.
+- [`approach/remote-reinstall.md`](approach/remote-reinstall.md): reinstalling a headless Linux box to encrypted Debian 13 over SSH via preseed, tested in QEMU first.
+- [`benchmarks/`](benchmarks/): startup, teardown, parallel launch, and snapshot restore timings for Incus containers.
+- [`scripts/`](scripts/): `probe.sh`, Debian preseed templates, and the Incus setup/benchmark scripts.
 
-## The short version
+## Rough comparison
 
-| | Hosted agents (typical) | Own laptop with Incus |
-| --- | --- | --- |
-| Base | Ubuntu 24.04 (Amp: Debian 13) | Debian 13, clean |
-| Per sandbox | 2–4 vCPU, 8–16 GB | up to 6 CPU, 6 GiB (configurable) |
-| Preinstalled | polyglot: Python, Node, Go, Rust, Java, Docker, often a browser | nothing; add layers you need |
-| New sandbox | tens of seconds | ~4 s, 8 in parallel in ~6 s |
-| Reset | new session | snapshot restore in ~4.5 s |
+Hosted agent VMs typically give you Ubuntu 24.04 (Amp uses Debian 13), 2–4 vCPU, 8–16 GB RAM, and a big polyglot image with Python, Node, Go, Rust, Java, Docker, and sometimes a browser. Spinning up a fresh session usually takes tens of seconds.
 
-## Probe a sandbox
+On my laptop with Incus, I start from a plain Debian 13 image with nothing preinstalled and layer tools on top as needed. A sandbox gets up to 6 CPUs and 6 GiB RAM by default, boots with networking in ~4 seconds (8 in parallel in ~6 seconds), and resets via snapshot restore in ~4.5 seconds.
+
+## Running the probe
 
 ```sh
 bash scripts/probe.sh > research/probes/<provider>/$(date +%F).md
 ```
 
-Read-only; prints environment variable names, never values. Check the output
-for internal hostnames or IPs before you commit it.
+The script is read-only and only prints environment variable names, never their values. Still worth skimming the output for internal hostnames or IPs before committing.
 
 ## License
 

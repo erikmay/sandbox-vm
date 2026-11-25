@@ -7,22 +7,18 @@ Checked: 2026-11-25. Sources:
 [GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
 [actions/runner-images](https://github.com/actions/runner-images).
 
-Copilot has two environments:
+Copilot uses two different backends:
 
-1. **A GitHub Actions runner** (the original model), usually `ubuntu-latest`;
-   Ubuntu x64 and Windows x64 only.
-2. **A cloud sandbox**, the newer default for sessions started from
-   github.com, mobile, Slack, Teams and VS Code: "an isolated Linux
-   environment" with no documented OS version, resources or tools.
-   `copilot-setup-steps.yml` does not apply there; dotfiles are copied in.
+1. **GitHub Actions runners** (the original backend), usually `ubuntu-latest` (Ubuntu x64 and Windows x64 only).
+2. **Cloud sandboxes**, the newer default for sessions kicked off from github.com, mobile, Slack, Teams, or VS Code. Docs only call it "an isolated Linux environment" without listing OS version, resources, or installed tools. `copilot-setup-steps.yml` doesn't apply there; dotfiles get copied in instead.
 
-## Runner image `ubuntu-latest`
+## Runner image (`ubuntu-latest`)
 
 | | |
 | --- | --- |
-| Base | Ubuntu 26.04.1 LTS, image version 20261116.202.1 |
+| Base | Ubuntu 26.04.1 LTS, image version `20261116.202.1` |
 | Isolation | Fresh VM per job, passwordless sudo |
-| Resources | Public repos 4 CPU / 16 GB / 14 GB SSD; private repos 2 CPU / 8 GB / 14 GB |
+| Resources | Public repos: 4 CPU / 16 GB / 14 GB SSD; private repos: 2 CPU / 8 GB / 14 GB |
 
 | Area | Contents |
 | --- | --- |
@@ -31,19 +27,10 @@ Copilot has two environments:
 | Browsers | Chrome and Chromium 157, Edge 157, Selenium |
 | Databases | PostgreSQL 18.7, MySQL 8.4 |
 
-The runner image is the largest of all providers here: it is built for CI of
-any project, not for agents.
+This is by far the heaviest image of the bunch because it's a general-purpose CI runner image, not something built specifically for coding agents.
 
 ## Network and customization
 
-- Firewall on by default with a recommended allowlist (OS repos, container
-  and language registries, certificate authorities, Playwright hosts). It
-  covers processes the agent starts, not the setup steps.
-- `.github/workflows/copilot-setup-steps.yml` with one job
-  `copilot-setup-steps`: `steps`, `permissions`, `runs-on`, `services`,
-  `snapshot`, `timeout-minutes` (max 59).
-- Runners are one job each; stopped cloud-sandbox sessions keep a snapshot.
+A firewall is enabled by default with a recommended allowlist (OS repos, container/language registries, CAs, Playwright hosts). It restricts processes started by the agent, not the setup steps.
 
-## Ground truth
-
-Docs describe the image; the probe shows it. Run [`scripts/probe.sh`](../../scripts/probe.sh) inside a session as described in [`METHOD.md`](../METHOD.md) and commit the result to `research/probes/github-copilot/`.
+Customization for Actions runners lives in `.github/workflows/copilot-setup-steps.yml` with a single `copilot-setup-steps` job (`steps`, `permissions`, `runs-on`, `services`, `snapshot`, `timeout-minutes` up to 59). Runner VMs are ephemeral per job; stopped cloud-sandbox sessions keep a snapshot.

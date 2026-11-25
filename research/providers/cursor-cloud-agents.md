@@ -9,34 +9,22 @@ Checked: 2026-11-25. Sources:
 
 | | |
 | --- | --- |
-| Base | "Isolated Ubuntu machines"; no version stated (the Docker install sample pins Ubuntu 24.04 packages) |
-| Isolation | VMs on AWS; Docker "runs inside another container layer", so probably a container in a VM |
-| Resources | "Default VM profile with limited memory and CPU", no numbers; Enterprise can ask for more |
+| Base | "Isolated Ubuntu machines", no version given (the Docker install example pins Ubuntu 24.04 packages) |
+| Isolation | AWS VMs; docs note Docker "runs inside another container layer", so likely a container inside a VM |
+| Resources | "Default VM profile with limited memory and CPU", no numbers published (Enterprise can request larger profiles) |
 
 ## Preinstalled
 
-Not documented. Agents start on "Cursor's default image" until your own build
-succeeds. Agents have computer use with a desktop and a browser. Docker is
-supported but you install it yourself (`fuse-overlayfs` and `iptables-legacy`
-recommended).
+Cursor doesn't document what ships in its default image. Agents have computer use with a desktop and browser. Docker works, though you have to install it yourself (`fuse-overlayfs` and `iptables-legacy` are recommended).
 
 ## Network
 
-Internet on by default. Admins choose "Default + allowlist" or "Allowlist
-only" per user, team or environment. Tailscale and Cloudflare Tunnel reach
-private networks. Egress IP ranges are published.
+Internet is open by default. Admins can switch to "Default + allowlist" or "Allowlist only" per user, team, or environment. Private networks are reachable via Tailscale or Cloudflare Tunnel, and egress IP ranges are published.
 
 ## Customization and lifetime
 
-- Agent-led setup in the dashboard, a saved snapshot, or a Dockerfile.
-- `.cursor/environment.json`: `snapshot`, `build.dockerfile` / `context`,
-  `install` (idempotent, runs on each build, timeout 5–300 minutes, default
-  90), `start` and `terminals` (tmux sessions at each agent start),
-  `repositoryDependencies`.
-- A build is a bootable disk snapshot including `/var/lib/docker`, without
-  processes. Builds are refreshed on a schedule; a failed build keeps the
-  last good one. Snapshots are deleted after 30 days without use.
+You can configure the environment interactively with an agent in the dashboard, save a snapshot, or point at a Dockerfile.
 
-## Ground truth
+`.cursor/environment.json` supports `snapshot`, `build.dockerfile` / `context`, `install` (idempotent, runs on each build, 5–300 min timeout, default 90), `start` and `terminals` (tmux sessions started with each agent), and `repositoryDependencies`.
 
-Docs describe the image; the probe shows it. Run [`scripts/probe.sh`](../../scripts/probe.sh) inside a session as described in [`METHOD.md`](../METHOD.md) and commit the result to `research/probes/cursor-cloud-agents/`.
+Builds produce a bootable disk snapshot (including `/var/lib/docker`, minus running processes) and refresh on a schedule. If a rebuild fails, the last working snapshot stays active. Unused snapshots get deleted after 30 days.

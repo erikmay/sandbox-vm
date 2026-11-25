@@ -1,13 +1,10 @@
-# Incus sandbox lifecycle
+# Incus sandbox lifecycle benchmarks
 
 Measured on 2026-11-25 with [`../scripts/incus/bench.sh`](../scripts/incus/bench.sh).
 
-**Host:** ASUS ZenBook 14 (AMD Ryzen 7 5700U, 8 cores / 16 threads, 16 GB
-RAM, WD SN530 NVMe), Debian 13, kernel 6.12, LUKS2 + LVM, Incus 6.0.4. LVM
-thin pool, `incusbr0` NAT bridge. `base` is a stopped `images:debian/13`
-container.
+Host hardware: ASUS ZenBook 14 (AMD Ryzen 7 5700U, 8C/16T, 16 GB RAM, WD SN530 NVMe) running Debian 13, kernel 6.12, LUKS2 + LVM, Incus 6.0.4. Storage is an LVM thin pool, networking is the default `incusbr0` NAT bridge, and `base` is a stopped `images:debian/13` container.
 
-## One sandbox (5 rounds)
+## Single sandbox (5 runs)
 
 | Step | Time |
 | --- | --- |
@@ -19,39 +16,36 @@ container.
 | `incus stop` + `incus delete` | 1.4–1.7 s + 0.7–0.9 s = **2.2–2.5 s** |
 | `incus delete --force` (running) | **1.9–2.1 s** |
 
-Launching straight from the cached image (`incus launch images:debian/13`)
-is slower: 4.3–4.5 s until `exec`, 5.0–5.5 s until network. Copying a
-stopped base is the faster path.
+Launching directly from the cached image (`incus launch images:debian/13`) took 4.3–4.5 s until `exec` and 5.0–5.5 s until network, so copying a stopped `base` container is noticeably quicker.
 
-## In parallel
+## Parallel launches
 
 | Sandboxes | Create, start, network | Delete all (`--force`) | Host RAM used |
 | --- | --- | --- | --- |
 | 4 | **3.8 s** | 2.6 s | 1.0 GB (14.3 GB available) |
 | 8 | **6.3 s** | 2.7 s | 1.2 GB (14.2 GB available) |
 
-An empty running sandbox costs about 50–60 MB of RAM.
+An idle running container takes roughly 50–60 MB of RAM.
 
-## Reset to a clean state
+## Snapshot reset
 
 | Step | Time |
 | --- | --- |
 | `incus snapshot create` (running sandbox) | **0.5 s** |
 | `incus snapshot restore`, until `exec` works | **4.3–4.6 s** |
 
-A 200 MB file written after the snapshot was gone after each restore.
+Verified by writing a 200 MB file after taking the snapshot and checking it disappeared after restore.
 
-## Compared with a hosted VM
+## vs. hosted VM (exe.dev trial)
 
-| | Incus on the laptop | exe.dev (trial) |
+| | Incus on laptop | exe.dev (trial) |
 | --- | --- | --- |
 | New sandbox usable | ~4 s | ~30 s (clone + start + agent) |
 | Delete | ~2 s | a few seconds |
 | Pause / resume | not measured | 4 s / 3 s |
 
-## Ideas
+## Notes for later
 
-- **Warm pool:** keep 2–3 stopped copies of `base` ready. A new sandbox is
-  then start + network, about 1.3 s instead of 4 s; refill in the background.
-- The copy is the largest part. It is an LVM thin snapshot plus Incus
-  bookkeeping; a ZFS or btrfs pool may be faster and is worth measuring.
+Keeping 2–3 stopped copies of `base` around as a warm pool would cut startup down to start + network (~1.3 s) while refilling in the background.
+
+Most of the 4 seconds is spent in `incus copy` (LVM thin snapshot plus Incus metadata). Might be worth benchmarking ZFS or btrfs on the same box to see if clones are faster there.
