@@ -1,6 +1,6 @@
 # Self-hosted sandboxes with Incus
 
-Instead of paying per-session for hosted agent VMs, I took an old laptop, put it in a rack, reinstalled it remotely with Debian 13, and set up [Incus](https://linuxcontainers.org/incus/) system containers as sandboxes.
+Instead of paying per-session for hosted agent VMs, I took an old laptop, put it in a rack, reinstalled it remotely with Debian 13, and set up [Incus](https://linuxcontainers.org/incus/) system containers as sandboxes. The host runs Debian 13, the sandboxes run Ubuntu 24.04.
 
 A used 8-core laptop has more CPU and RAM than the entry-level hosted tiers (2–4 vCPU, 8–16 GB) and costs basically nothing to keep running. Starting a fresh container takes about 4 seconds ([`../benchmarks/incus-lifecycle.md`](../benchmarks/incus-lifecycle.md)), compared to ~30 seconds on the hosted VMs I tested. I also get full control over the base image, networking, and how long state sticks around.
 
@@ -14,7 +14,7 @@ The obvious downside is maintaining the hardware, updates, and backups myself. A
                                      │  Incus 6.0 LTS
                                      │   ├─ storage: LVM thin pool (instant clones)
                                      │   ├─ network: incusbr0, NAT, 10.120.0.0/24
-                                     │   ├─ base        clean Debian 13, stopped
+                                     │   ├─ base        clean Ubuntu 24.04, stopped
                                      │   ├─ sandbox-1   copy of base, running
                                      │   └─ sandbox-2   copy of base, running
 ```
@@ -24,14 +24,20 @@ The obvious downside is maintaining the hardware, updates, and backups myself. A
 - **Remote unlock:** dropbear in the initramfs on port 2222, key-only, forced to `cryptroot-unlock` so reboots don't need physical access. TPM2 auto-unlock is on the todo list.
 - **Sandboxes:** Unprivileged Incus system containers with `security.nesting=true`. Full systemd inside, ~50–100 MB RAM overhead each, and Docker works inside them.
 - **Limits:** Default profile caps each container at 6 CPUs, 6 GiB RAM, and 40 GiB disk so a runaway build won't wedge the host.
-- **Base image:** Plain `images:debian/13` with nothing preinstalled. Tools go in separate layers instead of baking everything into one giant image.
+- **Base image:** Plain `images:ubuntu/24.04` with nothing extra installed. Tools go in separate layers instead of baking everything into one giant image.
 - **Network:** Standard NAT bridge (`incusbr0`). Sandboxes can reach the internet; egress restrictions via Incus network ACLs can be added later if needed.
+
+## Why Ubuntu in the sandboxes
+
+I started with `images:debian/13` and switched the sandboxes to Ubuntu 24.04, because that's what almost every hosted provider uses (Claude Code, Codex, Cursor; Copilot is on 26.04). Setup scripts, PPAs, vendor apt repos and `playwright install-deps` are mostly written and tested against Ubuntu LTS, and agents trip over fewer distro differences there.
+
+The host stays on Debian. Containers don't have their own kernel, so every sandbox runs on the host's Debian 6.12 kernel and only the userland is Ubuntu. Re-running the benchmark after the switch gave the same numbers (see [`../benchmarks/incus-lifecycle.md`](../benchmarks/incus-lifecycle.md)). The stock Ubuntu container image has 255 packages including Python 3.12 and no snapd; the Debian one had 182 and no Python.
 
 ## Image layering
 
 Following roughly what the hosted providers do:
 
-1. `base`: stock `images:debian/13`, never modified.
+1. `base`: stock `images:ubuntu/24.04`, never modified.
 2. `base-agent` (optional): the common baseline (git, gh, ripgrep, jq, Python + uv, Node + pnpm, Docker, Claude Code, Codex).
 3. Per-project containers: run the repo's setup script, take an `incus snapshot`, and clone from that for individual sessions.
 
@@ -43,7 +49,7 @@ Resetting a dirty sandbox takes ~4.5 seconds with `incus snapshot restore`, whic
 2. Set up the LVM thin pool and run `incus admin init --preseed` using [`../scripts/incus/`](../scripts/incus/).
 3. Create the base image and spin up a sandbox:
    ```sh
-   incus init images:debian/13 base
+   incus init images:ubuntu/24.04 base
    incus copy base sandbox-1 && incus start sandbox-1
    incus shell sandbox-1
    ```

@@ -1,6 +1,6 @@
 # sandbox-vm
 
-Notes on what hosted coding agents run inside (Claude Code on the web, Codex, Amp, Devin, Cursor, GitHub Copilot, Jules, exe.dev), a small probe script to inspect those sandboxes from the inside, and my own setup for running agent sandboxes on an old laptop with Debian 13 and [Incus](https://linuxcontainers.org/incus/).
+Notes on what hosted coding agents run inside (Claude Code on the web, Codex, Amp, Devin, Cursor, GitHub Copilot, Jules, exe.dev), a small probe script to inspect those sandboxes from the inside, and my own setup for running agent sandboxes on an old laptop with [Incus](https://linuxcontainers.org/incus/) (Debian 13 host, Ubuntu 24.04 sandboxes).
 
 Most hosted agent providers give each session a fresh Linux machine with a bunch of preinstalled runtimes, but only a few publish what's actually in the image. I wanted to see what they ship and compare it to just running containers on hardware I already own.
 
@@ -18,7 +18,7 @@ Most hosted agent providers give each session a fresh Linux machine with a bunch
 
 Hosted agent VMs typically give you Ubuntu 24.04 (Amp uses Debian 13), 2–4 vCPU, 8–16 GB RAM, and a big polyglot image with Python, Node, Go, Rust, Java, Docker, and sometimes a browser. Spinning up a fresh session usually takes tens of seconds.
 
-On my laptop with Incus, I start from a plain Debian 13 image with nothing preinstalled and layer tools on top as needed. A sandbox gets up to 6 CPUs and 6 GiB RAM by default, boots with networking in ~4 seconds (8 in parallel in ~6 seconds), and resets via snapshot restore in ~4.5 seconds.
+On my laptop with Incus, I start from a plain Ubuntu 24.04 container image (same base as most providers) with nothing extra installed and layer tools on top as needed. A sandbox gets up to 6 CPUs and 6 GiB RAM by default, boots with networking in ~4 seconds (8 in parallel in ~6 seconds), and resets via snapshot restore in ~4.5 seconds.
 
 ## Running the probe
 

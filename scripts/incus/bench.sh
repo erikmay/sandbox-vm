@@ -2,10 +2,11 @@
 # Incus sandbox lifecycle benchmark. Needs a stopped container "base".
 # Creates and deletes only instances named bench-*. Run as a user in incus-admin.
 set -u
+IMAGE=${IMAGE:-images:ubuntu/24.04}   # same image as base, so the launch test uses the cache
 ms() { date +%s%N; }
 d() { echo $(( ($2-$1)/1000000 )); }
 wait_exec() { until incus exec "$1" -- true 2>/dev/null; do sleep 0.05; done; }
-wait_net()  { until incus exec "$1" -- getent hosts deb.debian.org >/dev/null 2>&1; do sleep 0.1; done; }
+wait_net()  { until incus exec "$1" -- getent hosts archive.ubuntu.com >/dev/null 2>&1; do sleep 0.1; done; }
 incus list -c n --format csv | grep -q '^bench-' && { echo "bench-* exist, abort"; exit 1; }
 
 echo "== single sandbox, 5 rounds (ms)"
@@ -21,7 +22,7 @@ for i in 1 2 3; do n=bench-f$i; incus copy base $n; incus start $n; wait_exec $n
   t0=$(ms); incus delete --force $n; t1=$(ms); echo "delete --force: $(d $t0 $t1)"; done
 
 echo "== launch from the cached image instead of copying base, 3 rounds (ms)"
-for i in 1 2 3; do n=bench-i$i; t0=$(ms); incus launch images:debian/13 $n >/dev/null; wait_exec $n; t1=$(ms); wait_net $n; t2=$(ms)
+for i in 1 2 3; do n=bench-i$i; t0=$(ms); incus launch "$IMAGE" $n >/dev/null; wait_exec $n; t1=$(ms); wait_net $n; t2=$(ms)
   echo "launch->exec: $(d $t0 $t1)  ->net: $(d $t0 $t2)"; incus delete --force $n; done
 
 for N in 4 8; do
